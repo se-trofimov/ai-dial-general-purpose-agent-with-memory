@@ -46,6 +46,25 @@
    - Trigger search (indirectly) in new conversation, for instance if stored infor of place where you live, ask: `What should I wear now?` or `What is the weather?`. Expected behaviour: Model will retrieve info from Long memories and based on this context will make search about weather...
    - Trigger deletion. The long-term memory must be wiped out completely. Expected result: the `data.json` must be deleted with caches.
 
+### Implementation and local checks
+
+- Memory tools are registered as `store_memory`, `search_memory`, and `delete_all_memories`.
+- Storage is `files/{DIAL appdata home}/__long-memories/data.json`; requests must have DIAL application context. No fallback to a shared bucket is used.
+- The cache and async locks are keyed by the user-specific file path. Run one application worker: multi-worker deployments need shared caching and storage concurrency control.
+- Search uses normalized embeddings and FAISS cosine similarity. Deduplication runs on search when there are more than 10 records and the last run is at least 24 hours old (or absent), not as a background timer.
+- Exact FAISS range search removes pairs above cosine similarity `0.75`, prioritizing higher importance. Its worst-case cost is quadratic, chosen to avoid missed duplicates at the expected scale of roughly 1000 records; it is not an O(n log n) guarantee.
+- Missing files produce empty memory; authentication, network and invalid-data errors are reported, not treated as empty memory. Cache updates follow successful uploads only.
+- Deletion removes all saved facts and the user-specific cache, not the visible chat history. Individual-fact deletion is not supported.
+- The embedding model `all-MiniLM-L6-v2` is downloaded on first startup; subsequent starts can use its local model cache.
+
+Run focused tests (no Docker, model downloads or upstream credentials needed):
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+For an end-to-end check, configure upstream model keys locally, start the compose services, then start the agent with `python -m task.app` in the configured Python environment. Open the chat at `http://localhost:3000` and follow the scenarios above. Do not commit API keys.
+
 
 **Memories sample:**
 ```json

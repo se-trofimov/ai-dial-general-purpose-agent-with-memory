@@ -6,35 +6,30 @@ from task.tools.models import ToolCallParams
 
 
 class DeleteMemoryTool(BaseTool):
-    """
-    Tool for deleting all long-term memories about the user.
-
-    This permanently removes all stored memories from the system.
-    Use with caution - this action cannot be undone.
-    """
+    """Delete all persisted user memories and their cache."""
 
     def __init__(self, memory_store: LongTermMemoryStore):
         self.memory_store = memory_store
 
     @property
     def name(self) -> str:
-        # TODO: provide self-descriptive name
-        raise NotImplementedError()
+        return 'delete_all_memories'
 
     @property
     def description(self) -> str:
-        # TODO: provide tool description that will help LLM to understand when to use this tools and cover 'tricky'
-        #  moments (not more 1024 chars)
-        raise NotImplementedError()
+        return (
+            'Permanently delete ALL long-term memories for the current user and clear their cache. '
+            'Use only when the user explicitly requests forgetting all saved information. This '
+            'cannot delete a single selected fact; for a partial deletion request, explain this '
+            'limitation and ask permission before deleting everything. Never call alongside '
+            'store_memory. Do not claim deletion succeeded if this tool reports an error.'
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:
-        # TODO: provide tool parameters JSON Schema with empty properties
-        raise NotImplementedError()
+        return {'type': 'object', 'properties': {}, 'additionalProperties': False}
 
     async def _execute(self, tool_call_params: ToolCallParams) -> str:
-        #TODO:
-        # 1. Call `memory_store` `delete_all_memories` (we will implement logic in `memory_store` later
-        # 2. Add result to stage
-        # 3. Return result
-        raise NotImplementedError()
+        result = await self.memory_store.delete_all_memories(tool_call_params.api_key)
+        tool_call_params.stage.append_content(result)
+        return result

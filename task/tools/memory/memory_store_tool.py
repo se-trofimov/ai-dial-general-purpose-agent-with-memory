@@ -7,48 +7,59 @@ from task.tools.models import ToolCallParams
 
 
 class StoreMemoryTool(BaseTool):
-    """
-    Tool for storing long-term memories about the user.
-
-    The orchestration LLM should extract important, novel facts about the user
-    and store them using this tool. Examples:
-    - User preferences (likes Python, prefers morning meetings)
-    - Personal information (lives in Paris, works at Google)
-    - Goals and plans (learning Spanish, traveling to Japan)
-    - Important context (has a cat named Mittens)
-    """
+    """Store a durable fact about the user."""
 
     def __init__(self, memory_store: LongTermMemoryStore):
         self.memory_store = memory_store
 
     @property
     def name(self) -> str:
-        # TODO: provide self-descriptive name
-        raise NotImplementedError()
+        return 'store_memory'
 
     @property
     def description(self) -> str:
-        # TODO: provide tool description that will help LLM to understand when to use this tools and cover 'tricky'
-        #  moments (not more 1024 chars)
-        raise NotImplementedError()
+        return (
+            'Store an important, explicit fact about the user for future conversations: preferences, '
+            'location, goals, plans or personal context. Use one concise fact per call. Search first '
+            'to avoid storing a fact already remembered. Never store guesses, passwords, API keys, '
+            'temporary task details, or facts the user asks not to remember. Report success only '
+            'after this tool succeeds.'
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:
-        # TODO: provide tool parameters JSON Schema:
-        #  - content is string, description: "The memory content to store. Should be a clear, concise fact about the user.", required
-        #  - category is string, description: "Category of the info (e.g., 'preferences', 'personal_info', 'goals', 'plans', 'context')", default is 'general' required
-        #  - importance is number, description: "Importance score between 0 and 1. Higher means more important to remember.", minimum is 0, maximum is 1, default is 0.5
-        #  - topics is array of strings, description: "Related topics or tags for the memory", default is empty array
-        raise NotImplementedError()
+        return {
+            'type': 'object',
+            'properties': {
+                'content': {
+                    'type': 'string', 'minLength': 1,
+                    'description': 'The memory content to store. A clear, concise fact about the user.',
+                },
+                'category': {
+                    'type': 'string', 'default': 'general',
+                    'description': 'Category: preferences, personal_info, goals, plans or context.',
+                },
+                'importance': {
+                    'type': 'number', 'minimum': 0, 'maximum': 1, 'default': 0.5,
+                    'description': 'Importance score between 0 and 1. Higher means more important to remember.',
+                },
+                'topics': {
+                    'type': 'array', 'items': {'type': 'string'}, 'default': [],
+                    'description': 'Related topics or tags for the memory.',
+                },
+            },
+            'required': ['content', 'category'],
+            'additionalProperties': False,
+        }
 
     async def _execute(self, tool_call_params: ToolCallParams) -> str:
-        #TODO:
-        # 1. Load arguments with `json`
-        # 2. Get `content` from arguments
-        # 3. Get `category` from arguments
-        # 4. Get `importance` from arguments, default is 0.5
-        # 5. Get `topics` from arguments, default is empty array
-        # 6. Call `memory_store` `add_memory` (we will implement logic in `memory_store` later)
-        # 7. Add result to stage
-        # 8. Return result
-        raise NotImplementedError()
+        arguments = json.loads(tool_call_params.tool_call.function.arguments)
+        result = await self.memory_store.add_memory(
+            api_key=tool_call_params.api_key,
+            content=arguments['content'],
+            category=arguments['category'],
+            importance=arguments.get('importance', 0.5),
+            topics=arguments.get('topics', []),
+        )
+        tool_call_params.stage.append_content(result)
+        return result
